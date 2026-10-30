@@ -1,0 +1,468 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>그래프 블라인드 결정</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: 블라인드 릴레이 판 — 상태 띠 / 단계별 활동 판 (분석팀 → 가림 → 번갈아 카드 + 복원 → 결과) / 기록 */
+:root{
+  --bg:#F5F3EC; --panel:#FFFFFF; --soft:#F1EEE4; --ink:#1F2A44; --muted:#5A6478; --line:#E2DED2;
+  --navy:#1F2A44; --navy-ink:#F7F5EE; --yel:#F2C94C; --yel-soft:#FFF4CC; --yel-ink:#5A4600;
+  --an:#D9692A; --an-soft:#FBE7DB; --gr:#2F6FD6; --gr-soft:#E3ECFB; --alg:#7A4FD0; --alg-soft:#EFE7FB;
+  --good:#1F8A4C; --good-soft:#DFF3E6; --bad:#C2213A; --bad-soft:#FBE3E6;
+  --display:"Black Han Sans","Noto Sans KR",sans-serif; --sans:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141A24; --panel:#1C2433; --soft:#232D3F; --ink:#E8EDF5; --muted:#A3AEC0; --line:#2F3A4E;
+  --navy:#0E1420; --navy-ink:#F2F4F8; --yel:#F2C94C; --yel-soft:#3B3214; --yel-ink:#FBE39A;
+  --an:#FF9A5F; --an-soft:#3A2418; --gr:#7FA8FF; --gr-soft:#1E2C47; --alg:#B595FF; --alg-soft:#2B2140;
+  --good:#5FD08F; --good-soft:#173826; --bad:#FF7A8A; --bad-soft:#3E1C22; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141A24; --panel:#1C2433; --soft:#232D3F; --ink:#E8EDF5; --muted:#A3AEC0; --line:#2F3A4E;
+  --navy:#0E1420; --navy-ink:#F2F4F8; --yel:#F2C94C; --yel-soft:#3B3214; --yel-ink:#FBE39A;
+  --an:#FF9A5F; --an-soft:#3A2418; --gr:#7FA8FF; --gr-soft:#1E2C47; --alg:#B595FF; --alg-soft:#2B2140;
+  --good:#5FD08F; --good-soft:#173826; --bad:#FF7A8A; --bad-soft:#3E1C22; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6}
+.wrap{max-width:1300px;margin:0 auto;padding-block:18px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gr);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:46px;height:46px;border-radius:12px;background:var(--navy);color:var(--yel);display:grid;place-items:center;font-family:var(--display);font-size:22px}
+.brand b{display:block;font-size:17px}
+.brand span{font-size:12px;color:var(--muted);letter-spacing:.06em}
+.topbtns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;font-weight:700;min-height:44px}
+.btn.yel{background:var(--yel);border-color:var(--yel);color:#3A2E00}
+.btn.navy{background:var(--navy);border-color:var(--navy);color:var(--navy-ink)}
+.btn.big{padding:14px 18px;font-size:17px;border-radius:12px;width:100%}
+.btn.sm{min-height:34px;padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}
+.hero{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--an);font-weight:700;margin:0 0 4px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(28px,4.2vw,44px);line-height:1.2;margin:0 0 6px;text-wrap:balance}
+.hero p{margin:0;color:var(--muted);max-width:68ch}
+.tiers{display:grid;grid-template-columns:repeat(3,auto);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tiers span{padding:8px 14px;text-align:center;font-size:12.5px;color:var(--muted);font-weight:700}
+.tiers span+span{border-left:1px solid var(--line)}
+.tiers b{display:block;font-size:16px;color:var(--ink)}
+h2{font-size:22px;margin:0 0 10px;text-wrap:balance}
+h3{font-size:16.5px;margin:0 0 6px}
+.muted{color:var(--muted)} .small{font-size:13.5px}
+.status{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:center}
+.status>div{background:var(--soft);border-radius:10px;padding:8px 12px;min-width:0}
+.status span{display:block;font-size:12px;color:var(--muted);font-weight:700}
+.status strong{display:block;font-size:15px}
+.clock{font-family:var(--mono);font-variant-numeric:tabular-nums} .clock.urgent{color:var(--bad)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;align-items:start}
+.req{border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--panel);display:grid;gap:2px;text-align:left}
+.req .who{font-size:12.5px;font-weight:700;color:var(--an)}
+.req b{font-size:15px} .req span{font-size:13px;color:var(--muted)}
+.req[aria-pressed="true"]{border-color:var(--an);background:var(--an-soft)}
+.box{background:var(--soft);border-radius:14px;padding:14px 16px}
+.box.yel{background:var(--yel-soft);color:var(--yel-ink)} .box.navy{background:var(--navy);color:var(--navy-ink)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sec{display:grid;gap:12px;margin-top:14px}
+input[type=text],textarea,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:44px}
+input.co{width:84px;font-family:var(--mono);text-align:center}
+input.t{width:140px;font-family:var(--mono)}
+textarea{width:100%;min-height:110px;resize:vertical}
+.prompt{font-size:13.5px;background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;white-space:pre-wrap;word-break:keep-all;max-height:180px;overflow:auto;color:var(--ink)}
+.eq{font-family:var(--mono);font-size:clamp(20px,3vw,30px);border:2px solid var(--ink);border-radius:12px;padding:18px;text-align:center;background:var(--panel)}
+.kicker{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.kicker span{padding:4px 10px;border-radius:999px;font-size:12.5px;font-weight:700;background:var(--an-soft);color:var(--an)}
+.kicker.gr span{background:var(--gr-soft);color:var(--gr)}
+.ok{color:var(--good);font-weight:700} .warn{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:8px 12px;font-weight:700;font-size:13.5px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+th{background:var(--yel-soft);color:var(--yel-ink)}
+.tscroll{overflow-x:auto}
+.handoff{display:grid;place-items:center;text-align:center;min-height:420px;gap:12px}
+.shield{width:84px;height:96px;border-radius:42px 42px 22px 22px;background:var(--navy);display:grid;place-items:center;color:var(--yel);font-family:var(--display);font-size:34px}
+.turn{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--an-soft);color:var(--an);margin-bottom:10px}
+.turn.gr{background:var(--gr-soft);color:var(--gr)}
+.turn b{background:currentColor;border-radius:8px;padding:6px 10px;font-size:13px;flex:none}
+.turn b i{font-style:normal;color:var(--panel)}
+.turn strong{font-size:15px}
+.hints{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hint{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:center;min-height:70px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--soft);text-align:left}
+.hint>b{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:12px;background:var(--panel);color:var(--muted)}
+.hint strong{display:block;font-size:13.5px} .hint small{display:block;font-size:12px;color:var(--muted);line-height:1.35}
+.hint.alg>b{color:var(--alg)} .hint.used{background:var(--good-soft);border-color:var(--good)} .hint.used>b{background:var(--good);color:#fff}
+.log{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:460px;overflow:auto}
+.log li{border:1px solid var(--line);border-left:4px solid var(--an);border-radius:10px;padding:8px 10px;background:var(--soft)}
+.log li.g{border-left-color:var(--gr)}
+.log span{display:block;font-size:12px;color:var(--muted);font-weight:700}
+.log strong{display:block;font-size:14.5px}
+.log .empty{border:1px dashed var(--line);text-align:center;color:var(--muted);font-size:13px}
+.recon{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr);gap:12px}
+.pad{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel);touch-action:none}
+.cands{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:1000px){.cands{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cand{position:relative;border:2px solid var(--line);border-radius:10px;background:var(--panel);padding:6px;text-align:left}
+.cand>b{position:absolute;left:10px;top:8px;width:28px;height:28px;border-radius:7px;background:var(--navy);color:var(--navy-ink);display:grid;place-items:center;font-size:13px}
+.cand.out{opacity:.35}
+.cand .x{position:absolute;right:8px;top:8px;z-index:2;min-height:30px;padding:2px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:12.5px;font-weight:700}
+.cand.out .x{opacity:1;background:var(--bad-soft);color:var(--bad)}
+.cand .pick{all:unset;display:block;width:100%;cursor:pointer}
+.cand .pick:focus-visible{outline:3px solid var(--gr)}
+.cand[aria-checked="true"]{border-color:var(--good);background:var(--good-soft)} .cand[aria-checked="true"]>b{background:var(--good)}
+.cand svg{display:block;width:100%;height:auto}
+.res-head{display:flex;gap:14px;align-items:center}
+.mark{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;font-size:30px;font-weight:900;background:var(--good-soft);color:var(--good);flex:none}
+.mark.no{background:var(--bad-soft);color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stats div{background:var(--soft);border-radius:10px;padding:10px 12px}
+.stats span{display:block;font-size:12px;color:var(--muted);font-weight:700} .stats strong{display:block;font-size:17px}
+.evid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.evid div{background:var(--soft);border-radius:10px;padding:10px 12px}
+.evid b{color:var(--gr);font-size:13.5px} .evid p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.gbox{border:1px solid var(--line);border-radius:12px;padding:6px;background:var(--panel);overflow-x:auto}
+.gbox svg{display:block;width:100%;height:auto;min-width:480px}
+.hist td,.hist th{font-size:12.5px}
+.modal{position:fixed;inset:0;background:rgba(15,20,30,.55);display:grid;place-items:center;z-index:60;padding:16px}
+.modal .inner{background:var(--panel);color:var(--ink);border-radius:18px;max-width:1000px;width:100%;max-height:90vh;overflow:auto;padding:24px;display:grid;gap:14px}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.flow article{display:grid;grid-template-columns:34px 1fr;gap:10px;background:var(--soft);border-radius:10px;padding:12px}
+.flow article>b{width:32px;height:32px;border-radius:8px;background:var(--navy);color:var(--yel);display:grid;place-items:center}
+@media (max-width:1050px){.layout,.recon{grid-template-columns:minmax(0,1fr)}.hints{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:700px){.grid2,.stats,.evid,.flow,.cands{grid-template-columns:minmax(0,1fr)}.status{grid-template-columns:repeat(2,minmax(0,1fr))}.hints{grid-template-columns:minmax(0,1fr)}}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:8px 16px;font-weight:700;min-height:44px}
+.tab[aria-selected="true"]{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+.bigclock{font-family:var(--mono);font-size:clamp(80px,16vw,200px);line-height:1;text-align:center;font-variant-numeric:tabular-nums;margin:10px 0}
+.bigclock.urgent{color:var(--bad)}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bcell{background:var(--soft);border-radius:14px;padding:14px;display:grid;gap:8px;text-align:center;border:2px solid transparent}
+.bcell.top{border-color:var(--yel);background:var(--yel-soft)}
+.bcell .sc{font-family:var(--display);font-size:56px;line-height:1}
+.bcell .row{justify-content:center;gap:6px}
+.sent .sitem{border:1px solid var(--line);border-left:4px solid var(--an);border-radius:10px;padding:8px 12px;background:var(--soft)}
+.sent .sitem.extra{border-left-color:var(--bad)}
+.sent .sitem span{display:block;font-size:12px;color:var(--muted);font-weight:700}
+.sent .sitem strong{display:block;font-size:15.5px}
+.pickc{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:center;min-height:70px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--soft);text-align:left}
+.pickc>b{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:12px;background:var(--panel);color:var(--muted)}
+.pickc strong{display:block;font-size:13.5px}.pickc small{display:block;font-size:12px;color:var(--muted);line-height:1.35}
+.pickc[aria-pressed="true"]{border-color:var(--an);background:var(--an-soft)}
+.pickc[aria-pressed="true"]>b{background:var(--an);color:#fff}
+.demo-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--gr-soft);color:var(--gr);border-radius:12px;padding:10px 14px;font-weight:700}
+.rule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rule div{background:var(--soft);border-radius:12px;padding:14px}
+.rule b{display:block;font-size:16px;margin-bottom:4px}
+@media (max-width:700px){.board,.rule{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><div class="logo">f′</div><div><b>그래프를 보지 않고 결정할 수 있을까?</b><span>미적분Ⅰ · 도함수의 활용 · 2학년 3반</span></div></div>
+    <div class="topbtns" role="tablist" aria-label="화면 고르기"><button class="btn" id="vStudent" role="tab">학생 화면</button><button class="btn yel" id="vTeacher" role="tab">교사 화면 (전자칠판)</button></div>
+  </div>
+  <div id="app"></div>
+</div>
+
+<script>
+/* ---------- 사건 데이터: 정수 계수 삼차함수에서 만든 가상 데이터 ---------- */
+const DATA={
+ traffic:{name:'교통량',unit:'대',place:'안성 시내 어느 도로의 평일 시간당 교통량',cen:12,cenName:'정오(12시)',co:[2,3,-36,400]},
+ library:{name:'도서관 이용자 수',unit:'명',place:'안성시립도서관 어느 토요일 시간대별 이용자 수',cen:13,cenName:'13시',co:[-1,-3,24,400]},
+ park:{name:'방문객 수',unit:'명',place:'안성맞춤랜드 어느 주말 시간대별 방문객 수',cen:13,cenName:'13시',co:[-1,-9,81,1000]}
+};
+const poly=(co,t)=>((co[0]*t+co[1])*t+co[2])*t+co[3];
+const dpoly=(co,t)=>(3*co[0]*t+2*co[1])*t+co[2];
+const REQ=[
+ {id:'demo',data:'park',groups:'교사 시범',who:'안성맞춤랜드',what:'안전요원 추가 시각',text:'7시부터 19시 중 방문객이 가장 많은 때에 안전요원을 늘리려고 해요. 몇 시인가요?',dom:[7,19],kind:'max',
+  key:'증가 구간 카드 한 장이면 후보가 하나만 남아요. 극대 카드만으로는 2개가 남아요. f′(x)=0 카드는 4시도 알려 주는데, 4시는 정의역 밖이에요.'},
+ {id:'c1',data:'traffic',groups:'라운드 1 · 홀수 모둠',who:'안성경찰서',what:'교통 정리 인력 배치',text:'6시부터 18시 중 교통량이 가장 많은 때에 교통 정리 인력을 배치하려고 해요. 몇 시인가요?',dom:[6,18],kind:'max',
+  key:'극대 카드만 보내면 후보가 2개 남아서 9시로 착각하기 쉬워요. 극대 + 마지막 값(18시 724대)을 보내면 하나만 남아요. 오른쪽 끝이 봉우리보다 높아요.'},
+ {id:'c2',data:'traffic',groups:'라운드 1 · 짝수 모둠',who:'안성시청 도로과',what:'도로 공사 시각',text:'공사는 9시부터 16시 사이에만 할 수 있어요. 그중 교통량이 가장 적은 때에 공사를 하려고 해요. 몇 시인가요?',dom:[9,16],kind:'min',
+  key:'정의역이 9~16시라 그래프는 줄다가 늘기만 해요. 감소 구간이나 극소 카드 한 장이면 하나만 남아요.'},
+ {id:'c3',data:'library',groups:'라운드 2 · 홀수 모둠',who:'안성시립도서관',what:'안내 사서 추가 시각',text:'8시부터 20시 중 이용자가 가장 빠르게 늘어나는 때에 사서를 더 두려고 해요. 몇 시인가요?',dom:[8,20],kind:'rate',
+  key:'극대·극소 카드로는 후보가 3개나 남아요. 가장 많은 때(15시)가 아니라 가장 가파르게 올라가는 때를 묻기 때문에, 가장 빠른 증가 카드(12시) 한 장이 결정적이에요.'},
+ {id:'c4',data:'park',groups:'라운드 2 · 짝수 모둠',who:'안성시 교통과',what:'셔틀버스 운행 시간',text:'7시부터 19시 중 방문객이 1000명 이상인 동안 셔틀버스를 운행하려고 해요. 몇 시부터 몇 시까지인가요?',dom:[7,19],kind:'iv',c:1000,
+  key:'극대 카드로는 후보가 3개 남아요. 1000명과 만나는 시각 카드(13시, 18시 34분) 한 장이면 하나만 남아요.'}
+];
+REQ.forEach(r=>{const d=DATA[r.data];r.xs=[];r.ys=[];for(let x=r.dom[0];x<=r.dom[1];x++){r.xs.push(x);r.ys.push(poly(d.co,x-d.cen));}});
+const rtList=d=>{const [a,b,c]=d.co,A=3*a,B=2*b,D=Math.sqrt(B*B-4*A*c);return [(-B-D)/(2*A),(-B+D)/(2*A)].sort((p,q)=>p-q).map(v=>Math.round((v+d.cen)*1000)/1000);};
+const xco=d=>{const [a,b,c,e]=d.co,h=d.cen;return [a,-3*a*h+b,3*a*h*h-2*b*h+c,-a*h**3+b*h*h-c*h+e];};
+const tl=x=>{let H=Math.floor(x+1e-9),M=Math.round((x-H)*60);if(M===60){H++;M=0;}return M?`${H}시 ${M}분`:`${H}시`;};
+const jo=w=>{const c=String(w).trim().slice(-1).charCodeAt(0);return (c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28)?'이에요':'예요';};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtPoly=co=>{const p=[[co[0],'x³'],[co[1],'x²'],[co[2],'x'],[co[3],'']];let s='';p.forEach(([c,v],i)=>{if(!c)return;const a=Math.abs(c),sign=c<0?'−':'+';const body=(a===1&&v?'':a)+v;s+=s?` ${sign} ${body}`:(c<0?'−':'')+body;});return 'f(x) = '+s;};
+function roots(g,a,b){const r=[];const N=6000,h=(b-a)/N;for(let i=0;i<N;i++){const x0=a+i*h,x1=x0+h,g0=g(x0),g1=g(x1);if(g0===0)r.push(x0);else if(g0*g1<0){let lo=x0,hi=x1;for(let k=0;k<50;k++){const m=(lo+hi)/2;if(g(lo)*g(m)<=0)hi=m;else lo=m;}r.push((lo+hi)/2);}}return r.filter((v,i)=>i===0||Math.abs(v-r[i-1])>1e-3);}
+function analysis(r,co){const d=DATA[r.data];co=co||d.co;const f=x=>poly(co,x-d.cen),df=x=>dpoly(co,x-d.cen),[a,b]=r.dom;
+  const critAll=roots(df,a-40,b+40),crit=critAll.filter(x=>x>a+1e-6&&x<b-1e-6);
+  const ext=crit.map(x=>({x,v:f(x),type:df(x-0.01)>0?'max':'min'}));
+  const pts=[a,...crit,b],ivs=pts.slice(0,-1).map((p,i)=>({l:p,r:pts[i+1],up:df((p+pts[i+1])/2)>0}));
+  let rmax=a,rmin=a;for(let x=a;x<=b;x+=0.002){if(df(x)>df(rmax))rmax=x;if(df(x)<df(rmin))rmin=x;}
+  return {f,df,critAll,ext,ivs,rmax,rmin,fa:f(a),fb:f(b),f0:f(d.cen)};}
+function keyAns(r){const A=analysis(r),[a,b]=r.dom;
+  if(r.kind==='iv'){const ro=roots(x=>A.f(x)-r.c,a,b);return {iv:[A.f(a)>=r.c?a:ro[0],ro.length>1?ro[1]:b]};}
+  if(r.kind==='rate')return {pt:A.rmax};
+  let best=a;for(let x=a;x<=b+1e-9;x+=0.002){if(r.kind==='max'?A.f(x)>A.f(best):A.f(x)<A.f(best))best=x;}return {pt:best};}
+const keyText=r=>{const k=keyAns(r);return r.kind==='iv'?`${tl(k.iv[0])} ~ ${tl(k.iv[1])}`:tl(k.pt);};
+function num(u){u=String(u??'').trim();if(!u)return NaN;const m=u.match(/^(\d+(?:\.\d+)?)\s*시(?:\s*(\d+)\s*분)?(\s*반)?/);if(m)return +m[1]+(m[2]?+m[2]/60:0)+(m[3]?0.5:0);const n=parseFloat(u);return isFinite(n)?n:NaN;}
+function ansOk(r,a){const k=keyAns(r),t=r.kind==='rate'?1:0.5;if(r.kind==='iv')return Math.abs(num(a.a)-k.iv[0])<=t&&Math.abs(num(a.b)-k.iv[1])<=t;return Math.abs(num(a.a)-k.pt)<=t;}
+
+/* ---------- 단서 카드 (자동 계산) ---------- */
+function catalogue(r){const d=DATA[r.data],A=analysis(r),u=d.unit,mx=A.ext.filter(e=>e.type==='max'),mn=A.ext.filter(e=>e.type==='min'),up=A.ivs.find(v=>v.up),dn=A.ivs.find(v=>!v.up);
+  const H=(id,g,short,prompt,answer)=>({id,g,short,prompt,answer});
+  const list=[
+   H(1,'dif','극값 개수','정의역 안에서 극대·극소는 몇 개인가요?',`정의역 안에서 극대 ${mx.length}개, 극소 ${mn.length}개예요.`),
+   H(2,'dif','증가 구간','늘어나는 구간 하나를 알려 주세요.',up?`${tl(up.l)}~${tl(up.r)}에는 늘어나요.`:'정의역 안에서 늘어나는 구간은 없어요.'),
+   H(3,'dif','감소 구간','줄어드는 구간 하나를 알려 주세요.',dn?`${tl(dn.l)}~${tl(dn.r)}에는 줄어들어요.`:'정의역 안에서 줄어드는 구간은 없어요.'),
+   H(4,'dif','f′(x)=0인 시각','도함수가 0이 되는 시각을 알려 주세요.',(t=>`f′(x)=0이 되는 시각은 ${t}${jo(t)}.`)(A.critAll.map(tl).join(', '))),
+   H(5,'dif','극대','극댓값을 알려 주세요.',mx.length?(t=>t+jo(t)+'.')(mx.map(e=>`${tl(e.x)}에 극댓값 ${Math.round(e.v)}${u}`).join(', ')):'정의역 안에 극대가 없어요.'),
+   H(6,'dif','극소','극솟값을 알려 주세요.',mn.length?(t=>t+jo(t)+'.')(mn.map(e=>`${tl(e.x)}에 극솟값 ${Math.round(e.v)}${u}`).join(', ')):'정의역 안에 극소가 없어요.'),
+   H(7,'dif','가장 빠른 증가','가장 빠르게 늘어나는 시각은?',`${tl(A.rmax)}에 가장 빠르게 늘어요 (시간당 ${Math.round(A.df(A.rmax))}${u}).`),
+   H(8,'dif','가장 빠른 감소','가장 빠르게 줄어드는 시각은?',A.df(A.rmin)<0?`${tl(A.rmin)}에 가장 빠르게 줄어요 (시간당 ${Math.round(-A.df(A.rmin))}${u}).`:'정의역 안에서 줄어드는 때가 없어요.'),
+   H(9,'all','처음 값',`${tl(r.dom[0])}의 값은?`,`${tl(r.dom[0])}에 ${Math.round(A.fa)}${u}${jo(u)}.`),
+   H(10,'all','마지막 값',`${tl(r.dom[1])}의 값은?`,`${tl(r.dom[1])}에 ${Math.round(A.fb)}${u}${jo(u)}.`),
+   H(11,'all','최고차항 부호','최고차항 계수의 부호는?',d.co[0]>0?'양수예요. 시간이 갈수록 결국 위로 올라가요.':'음수예요. 시간이 갈수록 결국 아래로 내려가요.')
+   ];
+  if(r.c!=null){const ro=roots(x=>A.f(x)-r.c,r.dom[0],r.dom[1]);list.push(H(13,'alg',`${r.c}${u}과 만나는 시각`,`f(x)=${r.c}의 해는?`,`${ro.map(tl).join(', ')}에 ${r.c}${u}${jo(u)==='이에요'?'이':'가'} 돼요.`));}
+  return list;}
+
+/* ---------- 후보 그래프: 정답 · 시간 뒤집기 · 위아래 뒤집기 · 2시간 이동 ---------- */
+function seeded(items,seed){let s=0;for(const c of seed)s=(Math.imul(s^c.charCodeAt(0),16777619))>>>0;s=s||1;const v=items.slice();for(let i=v.length-1;i>0;i--){s=(Math.imul(s,1664525)+1013904223)>>>0;const j=s%(i+1);[v[i],v[j]]=[v[j],v[i]];}return v;}
+const ALT={
+ demo:[[[7,406],[12,1135],[19,700]],[[7,406],[19,1135]],[[7,900],[10,700],[16,1135],[19,946]]],
+ c1:[[[6,292],[9,481],[14,356],[18,430]],[[6,292],[9,800],[14,356],[18,724]],[[6,700],[10,356],[15,560],[18,420]]],
+ c2:[[[9,481],[11,356],[16,432]],[[9,481],[16,300]],[[9,400],[11,481],[16,300]]],
+ c3:[[[8,330],[9,320],[10,365],[11,396],[12,413],[13,422],[15,428],[17,330],[20,78]],[[8,330],[9,320],[11,328],[12,340],[13,362],[14,398],[15,428],[17,330],[20,78]],[[8,330],[11,300],[14,330],[17,410],[18,430],[20,400]]],
+ c4:[[[7,700],[11,1000],[16,1135],[19,1000]],[[7,406],[14.5,1000],[16,1135],[17.5,1000],[19,600]],[[7,406],[12,1135],[16,1000],[19,700]]]
+};
+function mono(P){const n=P.length,X=P.map(p=>p[0]),Y=P.map(p=>p[1]),d=[],m=[];for(let i=0;i<n-1;i++)d[i]=(Y[i+1]-Y[i])/(X[i+1]-X[i]);
+  m[0]=d[0];m[n-1]=d[n-2];for(let i=1;i<n-1;i++)m[i]=d[i-1]*d[i]<=0?0:(d[i-1]+d[i])/2;
+  for(let i=0;i<n-1;i++){if(d[i]===0){m[i]=0;m[i+1]=0;continue;}const a=m[i]/d[i],b=m[i+1]/d[i],q=a*a+b*b;if(q>9){const t=3/Math.sqrt(q);m[i]=t*a*d[i];m[i+1]=t*b*d[i];}}
+  return x=>{let i=0;while(i<n-2&&x>X[i+1])i++;const h=X[i+1]-X[i],t=Math.min(1,Math.max(0,(x-X[i])/h)),t2=t*t,t3=t2*t;return (2*t3-3*t2+1)*Y[i]+(t3-2*t2+t)*h*m[i]+(-2*t3+3*t2)*Y[i+1]+(t3-t2)*h*m[i+1];};}
+// 후보 그래프: 정답 1개 + 일부 단서는 같지만 의뢰의 답이 달라지는 그래프 3개
+function candidates(r){const d=DATA[r.data];const base=[{id:'ans',fn:x=>poly(d.co,x-d.cen),ans:true},...ALT[r.id].map((P,i)=>({id:'alt'+i,fn:mono(P)}))];
+  return seeded(base,r.id).map((v,i)=>({...v,label:'ABCD'[i]}));}
+
+/* ---------- 그래프 그리기 ---------- */
+function bounds(r,sets){let ys=[];sets.forEach(fn=>{for(let i=0;i<=120;i++){const x=r.dom[0]+(r.dom[1]-r.dom[0])*i/120;ys.push(fn(x));}});let lo=Math.min(...ys),hi=Math.max(...ys);const p=(hi-lo)*0.1||1;return [lo-p,hi+p];}
+function svgGraph(r,o){const d=DATA[r.data],W=o.w||520,H=o.h||300,L=o.yl?54:16,R=12,T=14,B=28,[y0,y1]=o.yb,x0=r.dom[0],x1=r.dom[1];
+  const X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=y=>T+(y1-y)/(y1-y0)*(H-T-B);let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria||'그래프')}">`;
+  const step=(x1-x0)>8?2:1;for(let k=x0;k<=x1;k+=step)s+=`<line x1="${X(k)}" x2="${X(k)}" y1="${T}" y2="${H-B}" stroke="var(--line)"/><text x="${X(k)}" y="${H-B+16}" font-size="11" text-anchor="middle" fill="var(--muted)">${k}시</text>`;
+  for(let i=0;i<=4;i++){const v=y0+(y1-y0)*i/4;s+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/>`;if(o.yl)s+=`<text x="${L-6}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="var(--muted)">${Math.round(v)}</text>`;}
+  if(r.c!=null&&o.cline)s+=`<line x1="${L}" x2="${W-R}" y1="${Y(r.c)}" y2="${Y(r.c)}" stroke="var(--alg)" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${W-R-4}" y="${Y(r.c)-5}" font-size="11" text-anchor="end" fill="var(--alg)">${r.c}${esc(d.unit)}</text>`;
+  (o.curves||[]).forEach(cv=>{let p='';for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240,y=cv.fn(x);p+=(i?'L':'M')+X(x).toFixed(1)+' '+Y(y).toFixed(1);}s+=`<path d="${p}" fill="none" stroke="${cv.col}" stroke-width="${cv.w||3}" stroke-linecap="round"/>`;});
+  if(o.points)r.xs.forEach((x,i)=>{s+=`<circle cx="${X(x)}" cy="${Y(r.ys[i])}" r="4" fill="var(--muted)"/>`;});
+  (o.vlines||[]).forEach((m,i)=>{if(!isFinite(m.x))return;const rt=X(m.x)>W-140;s+=`<line x1="${X(m.x)}" x2="${X(m.x)}" y1="${T}" y2="${H-B}" stroke="${m.col}" stroke-width="2.5" ${m.dash?'stroke-dasharray="6 4"':''}/><text x="${rt?X(m.x)-4:X(m.x)+4}" text-anchor="${rt?'end':'start'}" y="${T+12+i*15}" font-size="12" font-weight="700" fill="${m.col}">${esc(m.t)}</text>`;});
+  return s+'</svg>';}
+
+
+/* ---------- 후보 그래프가 단서와 맞는지 (교사 화면 '단서 비교'와 채점 설명에 사용) ---------- */
+function feat(r,f){const [a,b]=r.dom,df=x=>(f(x+1e-3)-f(x-1e-3))/2e-3;
+  const crit=roots(df,a+0.02,b-0.02).filter(x=>Math.sign(df(x-0.05))!==Math.sign(df(x+0.05)));
+  const ext=crit.map(x=>({x,v:f(x),type:df(x-0.05)>0?'max':'min'}));
+  const pts=[a,...crit,b],ivs=pts.slice(0,-1).map((p,i)=>({l:p,r:pts[i+1],up:df((p+pts[i+1])/2)>0}));
+  let rmax=a,rmin=a;for(let x=a;x<=b;x+=0.01){if(df(x)>df(rmax))rmax=x;if(df(x)<df(rmin))rmin=x;}
+  return {crit,ext,ivs,rmax,rmin,decr:df(rmin)<0,fa:f(a),fb:f(b),f12:f(12),end:Math.sign(df(b-0.05)),rc:r.c!=null?roots(x=>f(x)-r.c,a,b):[]};}
+function fits(id,T,C){const near=(p,q,t)=>Math.abs(p-q)<=t,rel=(p,q)=>Math.abs(p-q)<=Math.max(8,Math.abs(q)*0.04);
+  const iv=(A,B)=>(!A&&!B)||(A&&B&&near(A.l,B.l,0.5)&&near(A.r,B.r,0.5));
+  const ex=(t)=>{const P=T.ext.filter(e=>e.type===t),Q=C.ext.filter(e=>e.type===t);return P.length===Q.length&&P.every((e,i)=>near(e.x,Q[i].x,0.5)&&rel(Q[i].v,e.v));};
+  switch(id){
+   case 1:return T.ext.filter(e=>e.type==='max').length===C.ext.filter(e=>e.type==='max').length&&T.ext.filter(e=>e.type==='min').length===C.ext.filter(e=>e.type==='min').length;
+   case 2:return iv(T.ivs.find(v=>v.up),C.ivs.find(v=>v.up));
+   case 3:return iv(T.ivs.find(v=>!v.up),C.ivs.find(v=>!v.up));
+   case 4:return T.crit.length===C.crit.length&&T.crit.every((x,i)=>near(x,C.crit[i],0.5));
+   case 5:return ex('max');case 6:return ex('min');
+   case 7:return near(T.rmax,C.rmax,0.75);
+   case 8:return T.decr===C.decr&&(!T.decr||near(T.rmin,C.rmin,0.75));
+   case 9:return rel(C.fa,T.fa);case 10:return rel(C.fb,T.fb);case 11:return T.end===C.end;case 12:return rel(C.f12,T.f12);
+   case 13:return T.rc.length===C.rc.length&&T.rc.every((x,i)=>near(x,C.rc[i],0.3));}
+  return true;}
+function remaining(r,ids){const C=candidates(r),T=feat(r,C.find(c=>c.ans).fn);return C.filter(c=>c.ans||ids.every(id=>fits(id,T,feat(r,c.fn))));}
+
+/* ---------- 상태 ---------- */
+const KEY='graphBlindDecision.v2';
+let S={view:'student',g:1,roundNo:1,round:null,hist:[],tTab:'flow',board:Array(8).fill(0),cmp:{case:'c1',ids:[],show:false},clock:{total:420,left:420,run:false,at:0}};
+try{const o=JSON.parse(localStorage.getItem(KEY)||'null');if(o){S.g=o.g||1;S.roundNo=o.roundNo||1;S.hist=Array.isArray(o.hist)?o.hist:[];if(Array.isArray(o.board)&&o.board.length===8)S.board=o.board;}}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({g:S.g,roundNo:S.roundNo,hist:S.hist,board:S.board}));}catch(e){}};
+const $=id=>document.getElementById(id);
+const partnerOf=g=>g%2?g+1:g-1;
+const caseFor=(g,n)=>REQ.find(r=>r.id===(n===1?(g%2?'c1':'c2'):(g%2?'c3':'c4')));
+const mmss=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+const AN=R=>R.demo?'교사':`${R.me}모둠`,GR=R=>R.demo?'학생 대표':`${R.partner}모둠`;
+const SENT_PTS={1:20,2:15,3:10};
+function newRound(req,me,partner,demo){return {req,me,partner,demo:!!demo,stage:'solver',co:['','','',''],coOk:false,coTry:0,rt:['',''],rtOk:false,rtTry:0,sent:[],extra:null,out:[],cand:null,ans:{a:'',b:''},why:'',result:null};}
+
+/* ---------- 학생 화면 ---------- */
+function vSetup(){const req=caseFor(S.g,S.roundNo),p=partnerOf(S.g);
+  return `<section class="panel"><p class="eyebrow">START</p><h2>우리 모둠과 라운드를 고르세요</h2>
+  <div class="row"><label class="small muted">우리 모둠 <select id="gSel">${[1,2,3,4,5,6,7,8].map(g=>`<option value="${g}" ${g===S.g?'selected':''}>${g}모둠</option>`).join('')}</select></label>
+   <div class="tabs">${[1,2].map(n=>`<button class="tab" data-rn="${n}" aria-selected="${S.roundNo===n}">라운드 ${n}</button>`).join('')}</div></div>
+  <div class="sec grid2"><div class="req" aria-pressed="true"><span class="who">라운드 ${S.roundNo} · ${S.g}모둠이 분석할 사건</span><b>${esc(req.who)} · ${esc(req.what)}</b><span>${esc(req.text)}</span></div>
+   <div class="box"><b>오늘의 순서</b><ol class="small" style="margin:6px 0 0;padding-left:18px"><li>우리 모둠이 분석해요: ChatGPT로 식 만들기 → 활동지에 미분 → 해 확인</li><li>보낼 카드를 1~3장 골라요 (이유는 활동지에)</li><li>아이패드를 ${p}모둠과 바꿔요</li><li>${p}모둠 아이패드로 그래프를 찾고 의뢰에 답해요</li><li>결과 점수를 활동지에 적고, 아이패드를 돌려줘요</li></ol></div></div>
+  <button class="btn navy big" id="start" style="margin-top:14px">${S.g}모둠 분석 시작</button></section>
+  ${S.hist.length?`<section class="panel" style="margin-top:12px"><p class="eyebrow">RECORDS</p><h3>이 아이패드의 기록</h3><div class="tscroll"><table><tr><th>라운드</th><th>분석 → 복원</th><th>사건</th><th>보낸 카드</th><th>결과</th><th>복원 점수</th><th>분석 점수</th></tr>${S.hist.map(h=>`<tr><td>${h.n}</td><td>${h.me} → ${h.p}</td><td>${esc(h.who)}</td><td>${h.sent}장</td><td>${h.ok?'성공':'실패'}</td><td>${h.gs}</td><td>${h.as}</td></tr>`).join('')}</table></div></section>`:''}`;}
+function vSolver(R){const r=R.req,d=DATA[r.data];
+  const prompt=`다음은 ${d.place} 데이터야. (가상 데이터)\n${r.xs.map((x,i)=>`${x}시 ${r.ys[i]}${d.unit}`).join(', ')}\n시각 x에 대한 삼차함수 f(x) = ax³ + bx² + cx + d 로 근사해 줘. 계수 a, b, c, d를 알려 줘.`;
+  return `<section class="panel"><div class="kicker"><span>1단계 · ${AN(R)} 분석</span><b class="small muted">${GR(R)}은 아직 보지 마세요</b></div>
+  <div class="grid2"><div class="box"><span class="small" style="color:var(--an);font-weight:700">${esc(r.who)}의 의뢰</span><br><b>${esc(r.what)}</b><p class="small" style="margin:4px 0 0">${esc(r.text)}</p></div>
+   <div class="box"><span class="small muted">${esc(d.place)} (가상 데이터)</span><div class="tscroll" style="margin-top:6px"><table><tr>${r.xs.map(x=>`<th>${x}시</th>`).join('')}</tr><tr>${r.ys.map(y=>`<td>${y}</td>`).join('')}</tr></table></div></div></div>
+  <div class="sec"><div class="box"><h3>① ChatGPT로 데이터를 함수식으로 바꾸기</h3><div class="prompt" id="pr">${esc(prompt)}</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="cp">문장 복사</button><span class="small muted" id="cpm"></span></div>
+    <p class="small muted" style="margin:10px 0 6px">ChatGPT가 알려 준 계수를 넣으세요.</p>
+    <div class="row">${['a','b','c','d'].map((k,i)=>`<label class="small">${k} = <input class="co" type="text" inputmode="decimal" id="co${i}" value="${esc(R.co[i])}" aria-label="계수 ${k}"></label>`).join('')}<button class="btn sm navy" id="coChk">근사식 확인</button></div>
+    ${R.coTry&&!R.coOk?'<p class="warn" style="margin:10px 0 0">데이터와 맞지 않아요. 계수를 그대로 옮겼는지 확인하고, 소수로 나오면 가장 가까운 정수로 넣어 보세요.</p>':''}</div>
+  ${R.coOk?`<div class="box"><h3>② 활동지에 직접 미분하기</h3><div class="eq">${esc(fmtPoly(xco(d)))}</div>
+    <p class="small muted" style="margin:8px 0">정의역 ${r.dom[0]}시 ≤ x ≤ ${r.dom[1]}시</p>
+    <div class="box yel"><span class="small">활동지에 써요: ① f′(x) → ② 인수분해 → ③ f′(x)=0인 x → ④ 정의역 밖의 해 지우기 → ⑤ 증감표 (양 끝 칸 포함)</span></div>
+    <p class="small muted" style="margin:12px 0 6px">③에서 구한 x 두 개를 넣어 맞는지 확인하세요.</p>
+    <div class="row"><label class="small">x = <input class="co" type="text" inputmode="numeric" id="r0" value="${esc(R.rt[0])}" aria-label="첫째 해"></label><label class="small">x = <input class="co" type="text" inputmode="numeric" id="r1" value="${esc(R.rt[1])}" aria-label="둘째 해"></label><button class="btn sm navy" id="rtChk">해 확인</button></div>
+    ${R.rtTry&&!R.rtOk?'<p class="warn" style="margin:10px 0 0">다시 확인해 보세요. 각 항에 차수를 곱하고 차수를 하나 내렸나요? 인수분해한 식을 0으로 놓아 보세요.</p>':''}
+    ${R.rtOk?`<p class="ok" style="margin:10px 0 0">맞아요! x = ${rtList(d).join(', ')}. 정의역 ${r.dom[0]}시~${r.dom[1]}시 밖의 해가 있는지 확인하고 증감표를 완성하세요.</p>`:''}</div>
+  <button class="btn navy big" id="toPick" ${R.rtOk?'':'disabled'}>보낼 카드 고르기</button>`:''}</div></section>`;}
+function vPick(R){const r=R.req,cat=catalogue(r);
+  return `<section class="panel"><div class="kicker"><span>2단계 · ${AN(R)} 카드 고르기</span><b class="small muted">${GR(R)}은 아직 보지 마세요</b></div>
+  <h2>${GR(R)}에게 보낼 카드를 1~3장 고르세요</h2>
+  <div class="box yel" style="margin-bottom:12px"><span class="small">${GR(R)}은 이 카드만 보고 그래프 4개 중 진짜를 찾아 의뢰에 답해요. <b>보낸 카드만으로 진짜 그래프 하나만 남으면</b> 우리 점수는 1장 +20 · 2장 +15 · 3장 +10이에요. 후보가 2개 이상 남으면 0점이에요. <b>고른 이유는 활동지에</b> 써요.</span></div>
+  <div class="box" style="margin-bottom:12px"><span class="small" style="color:var(--an);font-weight:700">의뢰</span> · <span class="small">${esc(r.text)}</span></div>
+  <div class="hints">${cat.map(h=>`<button class="pickc" data-s="${h.id}" aria-pressed="${R.sent.includes(h.id)}"><b>${String(h.id).padStart(2,'0')}</b><span><strong>${esc(h.short)}</strong><small>${R.sent.includes(h.id)?esc(h.answer):esc(h.prompt)}</small></span></button>`).join('')}</div>
+  <p class="small muted" style="margin:10px 0 0">고른 카드 ${R.sent.length}장 / 최대 3장</p>
+  <button class="btn navy big" id="toHand" style="margin-top:10px" ${R.sent.length?'':'disabled'}>카드 확정 · 화면 가리기</button></section>`;}
+function vHand(R){return `<section class="panel handoff"><div class="shield">?</div><p class="eyebrow">PASS THE DEVICE</p><h2 style="font-size:28px">${R.demo?'학생 대표에게 넘겨요':`이 아이패드를 ${GR(R)}에게 건네주세요`}</h2>
+  <p class="muted" style="max-width:560px;margin:0">다음 화면에는 함수식과 데이터가 나오지 않아요. ${GR(R)}은 받은 카드만 보고 진짜 그래프를 찾아 의뢰에 답해요.</p>
+  <button class="btn navy" id="toGraph">${GR(R)} 시작</button></section>`;}
+function vGraph(R){const r=R.req,cat=catalogue(r),C=candidates(r),yb=bounds(r,C.map(c=>c.fn)),left=C.filter(c=>!R.out.includes(c.id)).length;
+  const card=(id,extra)=>{const h=cat.find(x=>x.id===id);return `<div class="sitem ${extra?'extra':''}"><span>${extra?'추가 카드 (−5점)':AN(R)+'이 보낸 카드'} · ${esc(h.short)}</span><strong>${esc(h.answer)}</strong></div>`;};
+  return `<section class="panel"><div class="kicker gr"><span>3단계 · ${GR(R)} 그래프 찾기</span><b class="small muted">${AN(R)}의 아이패드예요</b></div>
+  <div class="box" style="margin-bottom:12px"><span class="small" style="color:var(--an);font-weight:700">${esc(r.who)}의 의뢰</span><br><b>${esc(r.text)}</b></div>
+  <div>
+   <h3>받은 카드 ${R.sent.length}장</h3><div class="sent" style="display:grid;gap:8px">${R.sent.map(id=>card(id)).join('')}${R.extra?card(R.extra,true):''}</div>
+   ${R.extra||R.openExtra?'':`<button class="btn sm" id="openExtra" style="margin-top:10px">카드가 부족해요 · 추가 카드 1장 열기 (−5점)</button>`}
+   ${R.openExtra&&!R.extra?`<div class="box" style="margin-top:10px"><b class="small">추가로 열 카드 1장을 고르세요</b><div class="hints" style="margin-top:8px">${cat.filter(h=>!R.sent.includes(h.id)).map(h=>`<button class="pickc" data-x="${h.id}"><b>${String(h.id).padStart(2,'0')}</b><span><strong>${esc(h.short)}</strong><small>${esc(h.prompt)}</small></span></button>`).join('')}</div><button class="btn sm" id="closeExtra" style="margin-top:8px">취소</button></div>`:''}
+  </div><div style="margin-top:14px">
+   <div class="box yel" style="margin-bottom:8px"><b>후보 지우기</b> · <span class="small">카드와 맞지 않는 그래프를 ✕로 지우세요. 남은 후보 <b>${left}개</b>. ${left>1?'더 지울 수 없다면 골라서 도전하거나 추가 카드를 열어요.':'남은 그래프를 고르세요.'}</span></div>
+   <div class="cands" role="radiogroup" aria-label="그래프 고르기">${C.map(c=>`<div class="cand ${R.out.includes(c.id)?'out':''}" aria-checked="${R.cand===c.id}"><b>${c.label}</b><button class="x" data-out="${c.id}">${R.out.includes(c.id)?'되살리기':'✕ 지우기'}</button><button class="pick" role="radio" aria-checked="${R.cand===c.id}" aria-label="${c.label}번 그래프 고르기" data-cand="${c.id}" ${R.out.includes(c.id)?'disabled':''}>${svgGraph(r,{curves:[{fn:c.fn,col:'var(--an)'}],yb,w:380,h:230,aria:c.label+'번 그래프',cline:r.c!=null})}</button></div>`).join('')}</div>
+  </div>
+  <div class="box" style="margin-top:14px"><h3>4단계 · 고른 그래프로 의뢰에 답하기</h3>
+   ${r.kind==='iv'?`<div class="row"><input class="t" type="text" id="aA" value="${esc(R.ans.a)}" placeholder="예: 13시" aria-label="시작 시각"> ~ <input class="t" type="text" id="aB" value="${esc(R.ans.b)}" placeholder="예: 18시 30분" aria-label="끝 시각"></div>`:`<input class="t" type="text" id="aA" value="${esc(R.ans.a)}" placeholder="예: 14시" aria-label="답">`}
+   <p class="small muted" style="margin:10px 0 6px">이유 (시각 · 단위 · 그래프 모양을 넣어 한 문장)</p>
+   <textarea id="why" style="min-height:70px" placeholder="예) 오른쪽 끝 18시(724대)가 9시 봉우리(481대)보다 높으므로 18시에 배치한다.">${esc(R.why)}</textarea>
+   <button class="btn navy big" id="submit" style="margin-top:10px" ${R.cand&&R.ans.a.trim()&&(r.kind!=='iv'||R.ans.b.trim())&&R.why.trim()?'':'disabled'}>제출하고 결과 보기</button></div></section>`;}
+function vResult(R){const r=R.req,x=R.result,cat=catalogue(r),C=candidates(r),ans=C.find(c=>c.ans),mine=C.find(c=>c.id===R.cand),k=keyAns(r),yb=bounds(r,[ans.fn,mine?mine.fn:ans.fn]);
+  const vl=r.kind==='iv'?[{x:k.iv[0],col:'var(--good)',t:'정답 '+tl(k.iv[0])},{x:k.iv[1],col:'var(--good)',t:'정답 '+tl(k.iv[1])}]:[{x:k.pt,col:'var(--good)',t:'정답 '+tl(k.pt)}];
+  const left=remaining(r,R.sent).length,sum=`[라운드 ${R.demo?'시범':S.roundNo}] ${AN(R)} → ${GR(R)} · ${r.who} · 보낸 카드 ${R.sent.map(id=>cat.find(h=>h.id===id).short).join(', ')}${R.extra?' (+추가 '+cat.find(h=>h.id===R.extra).short+')':''} · 그래프 ${x.graphOk?'성공':'실패'} · 답 ${r.kind==='iv'?R.ans.a+'~'+R.ans.b:R.ans.a} · 점수 ${GR(R)} ${x.gs}, ${AN(R)} ${x.as}`;
+  return `<section class="panel"><div class="res-head"><div class="mark ${x.graphOk?'':'no'}">${x.graphOk?'✓':'×'}</div><div><p class="eyebrow">RESULT</p>
+   <h2 style="margin:0">${x.graphOk?'진짜 그래프를 찾았어요!':'다른 그래프를 골랐어요.'}</h2>
+   <p class="muted" style="margin:4px 0 0">${left===1?`${AN(R)}이 보낸 카드만으로 진짜 그래프 하나만 남아요. 정확한 카드를 보냈어요.`:`${AN(R)}이 보낸 카드만으로는 후보가 ${left}개 남아요. 어떤 카드가 더 필요했을까요?`}</p></div></div>
+  <div class="stats" style="margin-top:14px"><div><span>${GR(R)} (복원)</span><strong>+${x.gs}점</strong></div><div><span>${AN(R)} (분석)</span><strong>+${x.as}점</strong></div><div><span>의뢰 답</span><strong>${x.ansOk?'맞음':'다시 생각'} · 정답 ${keyText(r)}</strong></div><div><span>카드</span><strong>보냄 ${R.sent.length}장${R.extra?' + 추가 1장':''}</strong></div></div>
+  <p class="small" style="margin:8px 0 0;font-weight:700">두 모둠 모두 이 점수를 활동지 점수 칸에 적으세요.</p>
+  <div class="sec grid2"><div><h3>그래프 비교</h3><div class="gbox">${svgGraph(r,{curves:[...(mine&&!mine.ans?[{fn:mine.fn,col:'var(--bad)',w:2.5}]:[]),{fn:ans.fn,col:'var(--good)'}],yb,yl:true,points:true,vlines:vl,cline:r.c!=null,w:620,h:320,aria:'정답 그래프와 데이터'})}</div>
+    <p class="small muted" style="margin:6px 0 0">초록 곡선이 진짜 그래프, 회색 점이 데이터예요.${mine&&!mine.ans?' 빨간 곡선은 고른 그래프예요.':''}</p></div>
+   <div><h3>결정적인 단서</h3><div class="box yel"><b>${esc(r.key)}</b></div>
+    <h3 style="margin-top:12px">${GR(R)}의 답과 이유</h3><div class="box small"><b>${esc(r.kind==='iv'?R.ans.a+' ~ '+R.ans.b:R.ans.a)}</b> · ${esc(R.why)}</div>
+    <h3 style="margin-top:12px">패들렛에 붙일 요약</h3><div class="prompt" id="sum">${esc(sum)}</div><div class="row" style="margin-top:6px"><button class="btn sm" id="cpSum">요약 복사</button><span class="small muted" id="cpSumM">이 화면도 캡처해서 함께 올려요</span></div></div></div>
+  <button class="btn navy big" id="done" style="margin-top:14px">${R.demo?'시범 끝내기 · 교사 화면으로':`아이패드를 ${AN(R)}에게 돌려주기`}</button></section>`;}
+
+/* ---------- 교사 화면 ---------- */
+const TT=[['flow','수업 흐름'],['demo','시범'],['clock','타이머'],['board','점수판'],['cmp','단서 비교 (공유)'],['key','정답·발문']];
+function vTeacher(){const t=S.tTab;let body='';
+  if(t==='flow')body=`<h2>수업 흐름 (50분)</h2><div class="tscroll"><table>
+   <tr><th>시간</th><th>활동</th><th>전자칠판</th></tr>
+   <tr><td>0–5분</td><td>도입 · 질문 "그래프를 보지 않고 결정할 수 있을까?" · 수업 목표</td><td>PPT</td></tr>
+   <tr><td>5–12분</td><td>규칙 설명 · 교사 시범 (교사 = 분석, 학생 대표 = 복원)</td><td>시범 탭</td></tr>
+   <tr><td>12–19분</td><td>라운드 1 분석 (8모둠 동시)</td><td>타이머 7분</td></tr>
+   <tr><td>19–24분</td><td>라운드 1 복원 (아이패드 교환)</td><td>타이머 5분 → 점수판 입력</td></tr>
+   <tr><td>24–31분</td><td>라운드 2 분석</td><td>타이머 7분</td></tr>
+   <tr><td>31–36분</td><td>라운드 2 복원</td><td>타이머 5분 → 점수판 입력</td></tr>
+   <tr><td>36–44분</td><td>공유 · 같은 사건인데 결과가 갈린 모둠 비교</td><td>단서 비교 탭 · 패들렛</td></tr>
+   <tr><td>44–50분</td><td>정리 · 1등 발표 · 출구 카드</td><td>점수판 · PPT</td></tr></table></div>
+   <h3 style="margin-top:14px">학생에게 설명할 규칙</h3><div class="rule">
+    <div><b>① 분석</b><span class="small">ChatGPT로 데이터를 식으로 바꾸고, 활동지에 직접 미분해요. 웹툴은 해가 맞는지 확인해 줘요. (선생님이 8모둠을 동시에 확인할 수 없어서예요)</span></div>
+    <div><b>② 카드 1~3장</b><span class="small">옆 모둠이 그래프를 찾는 데 꼭 필요한 카드만 골라요. 카드 내용은 웹툴이 정확히 보여 줘요. 고른 이유는 활동지에 써요.</span></div>
+    <div><b>③ 교환 · 복원</b><span class="small">아이패드를 바꿔요. 받은 카드로 후보 그래프를 지우고, 하나를 골라 의뢰에 답해요. 부족하면 추가 카드 1장 (−5점).</span></div></div>
+   <h3 style="margin-top:14px">점수와 1등</h3><div class="rule">
+    <div><b>복원 모둠</b><span class="small">그래프 맞힘 +10 · 의뢰 답 맞힘 +10 · 추가 카드 −5</span></div>
+    <div><b>분석 모둠</b><span class="small">보낸 카드만으로 진짜 그래프 하나만 남으면 1장 +20 · 2장 +15 · 3장 +10 · 후보가 2개 이상 남으면 0</span></div>
+    <div><b>1등</b><span class="small">라운드 2번의 분석 점수 + 복원 점수 합계. 라운드가 끝날 때마다 모둠이 점수를 말하면 점수판에 입력해요.</span></div></div>`;
+  if(t==='demo')body=`<h2>교사 시범 (7분)</h2><div class="box"><b>안성맞춤랜드 · 가장 붐비는 때</b><p class="small" style="margin:4px 0 0">선생님이 분석 모둠, 학생 대표 2명이 복원 모둠을 맡아요. 학생 화면과 똑같이 진행돼요.</p></div>
+   <div class="sec"><h3>꼭 보여 줄 다섯 가지</h3><ol class="small" style="margin:0;padding-left:18px;display:grid;gap:6px">
+    <li><b>ChatGPT로 식 만들기</b> · 문장 복사 → 계수 넣고 확인</li>
+    <li><b>직접 미분</b> · f′(x) = −3x² + 60x − 192 = −3(x − 4)(x − 16) → <b>4시는 정의역(7~19시) 밖이니 지워요</b> → 증감표 7시 406 ↗ 16시 1135 ↘ 19시 946</li>
+    <li><b>카드 고르는 생각을 소리 내어</b> · "최댓값을 바로 알려 주는 카드는 없어요. 미분으로 아는 정보만 줄 수 있어요. 많이 주면 쉽지만 점수가 낮고, 적게 주면 틀릴 수 있어요. 증가 구간 한 장이면 16시까지 오르다 내려가니 충분하겠다."</li>
+    <li><b>후보 지우기</b> · 학생 대표가 카드와 맞지 않는 그래프를 지우고, 남은 하나를 고르기</li>
+    <li><b>이유 쓰는 법</b> · ❌ "16" → ⭕ "16시까지 늘다가 줄어들므로 16시(1135명)가 가장 많다."</li></ol>
+    <div class="box yel"><b>마지막 질문 (답은 말하지 않기)</b> "이번엔 극대가 가장 높은 곳이었어요. 항상 그럴까요?"</div>
+    <button class="btn navy big" id="runDemo">시범 시작 (학생 화면으로 진행)</button></div>`;
+  if(t==='clock'){const c=S.clock;body=`<h2>타이머</h2><div class="bigclock ${c.left<=60&&c.run?'urgent':''}" id="bc">${mmss(c.left)}</div>
+   <div class="row" style="justify-content:center">${[[420,'분석 7분'],[300,'복원 5분'],[180,'3분'],[60,'1분']].map(([v,l])=>`<button class="btn" data-ck="${v}">${l}</button>`).join('')}</div>
+   <div class="row" style="justify-content:center;margin-top:10px"><button class="btn navy" id="ckGo">${c.run?'일시정지':'시작'}</button><button class="btn" id="ckReset">다시</button></div>`;}
+  if(t==='board'){const mx=Math.max(...S.board);body=`<h2>점수판</h2><p class="small muted" style="margin:0 0 10px">라운드가 끝날 때마다 각 모둠이 결과 화면의 점수를 말하면 더해 주세요. 노란 칸이 현재 1등이에요.</p>
+   <div class="board">${S.board.map((v,i)=>`<div class="bcell ${mx>0&&v===mx?'top':''}"><b>${i+1}모둠</b><div class="sc">${v}</div><div class="row">${[10,15,20].map(n=>`<button class="btn sm" data-b="${i}" data-d="${n}">+${n}</button>`).join('')}</div><div class="row"><button class="btn sm" data-b="${i}" data-d="5">+5</button><button class="btn sm" data-b="${i}" data-d="-5">−5</button></div></div>`).join('')}</div>
+   <button class="btn sm" id="bReset" style="margin-top:12px">점수판 초기화</button>`;}
+  if(t==='cmp'){const r=REQ.find(q=>q.id===S.cmp.case),cat=catalogue(r),C=candidates(r),yb=bounds(r,C.map(c=>c.fn)),rem=remaining(r,S.cmp.ids).map(c=>c.id);
+   body=`<h2>단서 비교 · 공유 시간</h2><p class="small muted" style="margin:0 0 10px">모둠이 보낸 카드를 눌러 보세요. 그 카드만으로 남는 후보 그래프가 보여요. 결과가 갈린 두 모둠의 카드를 차례로 눌러 비교해요.</p>
+   <div class="tabs">${REQ.map(q=>`<button class="tab" data-cc="${q.id}" aria-selected="${q.id===S.cmp.case}">${q.id==='demo'?'시범':esc(q.what)}</button>`).join('')}</div>
+   <div class="box" style="margin-top:12px"><b>${esc(r.who)}의 의뢰</b> · <span class="small">${esc(r.text)}</span></div>
+   <div class="sec hints">${cat.map(h=>`<button class="pickc" data-ci="${h.id}" aria-pressed="${S.cmp.ids.includes(h.id)}"><b>${String(h.id).padStart(2,'0')}</b><span><strong>${esc(h.short)}</strong><small>${S.cmp.ids.includes(h.id)?esc(h.answer):esc(h.prompt)}</small></span></button>`).join('')}</div>
+   <div class="box yel row" style="margin-top:12px"><b>남은 후보 ${rem.length}개</b> <span class="small">${rem.length===1?'· 이 카드들로 진짜 그래프를 찾을 수 있어요.':'· 아직 헷갈리는 그래프가 있어요. 무엇이 다른가요?'}</span> <button class="btn sm" id="cmpShow">${S.cmp.show?'정답 숨기기':'정답 보기'}</button> <button class="btn sm" id="cmpClr">카드 초기화</button></div>
+   <div class="cands" style="margin-top:12px">${C.map(c=>`<div class="cand ${rem.includes(c.id)?'':'out'}" aria-checked="${S.cmp.show&&c.ans}"><b>${c.label}</b>${svgGraph(r,{curves:[{fn:c.fn,col:S.cmp.show&&c.ans?'var(--good)':'var(--an)'}],yb,w:380,h:230,aria:c.label+'번 그래프',cline:r.c!=null})}</div>`).join('')}</div>`;}
+  if(t==='key')body=`<h2>정답과 결정적인 단서</h2><div class="tscroll"><table><tr><th>사건</th><th>함수</th><th>f′(x)=0</th><th>정답</th><th>결정적인 단서</th></tr>
+   ${REQ.map(r=>`<tr><td style="text-align:left"><b>${esc(r.groups)}</b><br>${esc(r.who)} · ${esc(r.what)}<br><span class="small muted">${r.dom[0]}~${r.dom[1]}시</span></td><td>${esc(fmtPoly(xco(DATA[r.data])))}</td><td>${rtList(DATA[r.data]).map(tl).join(', ')}</td><td><b>${keyText(r)}</b></td><td class="small" style="text-align:left">${esc(r.key)}</td></tr>`).join('')}</table></div>
+   <h3 style="margin-top:14px">순회 발문</h3><div class="rule">
+    <div><b>분석할 때</b><span class="small">"AI가 준 식에 9를 넣으면 데이터 값과 같아요?" · "f′(x)=0의 해 중 정의역 밖은?" · "의뢰가 묻는 건 그래프의 어느 부분이에요?"</span></div>
+    <div><b>카드 고를 때</b><span class="small">"이 카드만 받으면 어떤 그래프와 헷갈릴까요?" · "한 장 줄이면 어떻게 될까요?"</span></div>
+    <div><b>복원할 때</b><span class="small">"이 카드로 어떤 후보를 지울 수 있어요?" · "남은 두 그래프는 어디가 달라요?" · "이유에 시각·단위·그래프 모양이 들어갔어요?"</span></div></div>
+   <h3 style="margin-top:14px">정리 (44–50분)</h3><div class="box yel"><b>① 극값만으로는 최댓값·최솟값을 알 수 없다. 정의역의 끝값까지 비교한다.</b><br>② 의뢰가 정의역을 정한다. f′(x)=0의 해가 정의역 밖이면 지운다.<br>③ 가장 빠르게 변하는 때는 극값이 아니라 f′(x)가 가장 큰 때다.<br>④ AI는 데이터를 식으로 바꿔 주지만, 무엇이 필요한지 고르고 그래프로 결정하는 건 우리의 몫이다.</div>
+   <h3 style="margin-top:14px">출구 카드</h3><div class="box">"최댓값을 알려 주려면 극값 말고 어떤 정보가 더 필요한가? 그 이유를 그래프로 설명하시오."</div>`;
+  return `<section class="panel"><div class="tabs" role="tablist">${TT.map(([k,l])=>`<button class="tab" role="tab" data-tt="${k}" aria-selected="${t===k}">${l}</button>`).join('')}</div></section><section class="panel" style="margin-top:12px">${body}</section>`;}
+
+/* ---------- 렌더 ---------- */
+let ck=null;
+function render(){const app=$('app');$('vStudent').className='btn'+(S.view==='student'?' navy':'');$('vTeacher').className='btn'+(S.view==='teacher'?' navy':' yel');
+  if(S.view==='teacher'){app.innerHTML=vTeacher();bindTeacher();return;}
+  const R=S.round;if(!R){app.innerHTML=vSetup();bindSetup();return;}
+  const bar=R.demo?`<div class="demo-bar"><span>교사 시범 중 · 안성맞춤랜드</span><button class="btn sm" id="endDemo">교사 화면으로</button></div>`:'';
+  app.innerHTML=`<div style="display:grid;gap:12px">${bar}${({solver:vSolver,pick:vPick,hand:vHand,graph:vGraph,result:vResult})[R.stage](R)}</div>`;bindRound();}
+const keepY=fn=>{const y=window.scrollY;fn();render();window.scrollTo(0,y);};
+function copy(t,m){try{navigator.clipboard.writeText(t).then(()=>{$(m).textContent='복사했어요';},()=>{$(m).textContent='길게 눌러 직접 복사하세요';});}catch(e){$(m).textContent='길게 눌러 직접 복사하세요';}}
+function bindSetup(){$('gSel').onchange=e=>{S.g=+e.target.value;save();render();};document.querySelectorAll('[data-rn]').forEach(b=>b.onclick=()=>{S.roundNo=+b.dataset.rn;save();render();});
+  $('start').onclick=()=>{S.round=newRound(caseFor(S.g,S.roundNo),S.g,partnerOf(S.g),false);render();window.scrollTo(0,0);};}
+function bindRound(){const R=S.round,on=(id,ev,fn)=>{const e=$(id);if(e)e.addEventListener(ev,fn);},go=st=>{R.stage=st;render();window.scrollTo(0,0);};
+  on('endDemo','click',()=>{S.round=null;S.view='teacher';render();});
+  on('cp','click',()=>copy($('pr').textContent,'cpm'));
+  [0,1,2,3].forEach(i=>on('co'+i,'input',e=>{R.co[i]=e.target.value;}));
+  on('coChk','click',()=>keepY(()=>{R.coTry++;const co=R.co.map(v=>parseFloat(String(v).replace('−','-'))),X=xco(DATA[R.req.data]);R.coOk=co.every((v,i)=>isFinite(v)&&Math.abs(v-X[i])<=Math.max(0.05,Math.abs(X[i])*0.002));}));
+  [0,1].forEach(i=>on('r'+i,'input',e=>{R.rt[i]=e.target.value;}));
+  on('rtChk','click',()=>keepY(()=>{R.rtTry++;const want=rtList(DATA[R.req.data]),got=R.rt.map(v=>parseFloat(String(v).replace('−','-'))).filter(isFinite).sort((p,q)=>p-q);R.rtOk=got.length===2&&got.every((v,i)=>Math.abs(v-want[i])<0.01);}));
+  on('toPick','click',()=>go('pick'));
+  document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>keepY(()=>{const id=+b.dataset.s;if(R.sent.includes(id))R.sent=R.sent.filter(v=>v!==id);else if(R.sent.length<3)R.sent.push(id);}));
+  on('toHand','click',()=>go('hand'));on('toGraph','click',()=>go('graph'));
+  on('openExtra','click',()=>keepY(()=>{R.openExtra=true;}));on('closeExtra','click',()=>keepY(()=>{R.openExtra=false;}));
+  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>keepY(()=>{R.extra=+b.dataset.x;R.openExtra=false;}));
+  document.querySelectorAll('[data-out]').forEach(b=>b.onclick=()=>keepY(()=>{const id=b.dataset.out;R.out=R.out.includes(id)?R.out.filter(v=>v!==id):[...R.out,id];if(R.out.includes(R.cand))R.cand=null;}));
+  document.querySelectorAll('[data-cand]').forEach(b=>b.onclick=()=>keepY(()=>{R.cand=b.dataset.cand;}));
+  const ready=()=>{const s=$('submit');if(s)s.disabled=!(R.cand&&R.ans.a.trim()&&(R.req.kind!=='iv'||R.ans.b.trim())&&R.why.trim());};
+  on('aA','input',e=>{R.ans.a=e.target.value;ready();});on('aB','input',e=>{R.ans.b=e.target.value;ready();});on('why','input',e=>{R.why=e.target.value;ready();});
+  on('submit','click',()=>{const graphOk=candidates(R.req).find(c=>c.id===R.cand)?.ans===true,aOk=ansOk(R.req,R.ans);
+    const gs=(graphOk?10:0)+(aOk?10:0)-(R.extra?5:0),exact=remaining(R.req,R.sent).length===1,as=exact?SENT_PTS[R.sent.length]:0;R.result={graphOk,ansOk:aOk,gs,as,exact};
+    if(!R.demo){S.hist.unshift({n:S.roundNo,me:AN(R),p:GR(R),who:R.req.who,sent:R.sent.length,ok:graphOk,gs,as});save();}go('result');});
+  on('cpSum','click',()=>copy($('sum').textContent,'cpSumM'));
+  on('done','click',()=>{if(R.demo){S.round=null;S.view='teacher';}else{S.round=null;if(S.roundNo===1){S.roundNo=2;save();}}render();window.scrollTo(0,0);});}
+function bindTeacher(){document.querySelectorAll('[data-tt]').forEach(b=>b.onclick=()=>{S.tTab=b.dataset.tt;render();});
+  const on=(id,fn)=>{const e=$(id);if(e)e.onclick=fn;};
+  on('runDemo',()=>{S.round=newRound(REQ[0],0,0,true);S.view='student';render();window.scrollTo(0,0);});
+  document.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{S.clock={total:+b.dataset.ck,left:+b.dataset.ck,run:false};stopCk();render();});
+  on('ckGo',()=>{const c=S.clock;if(c.run){c.run=false;stopCk();}else{c.run=true;c.end=Date.now()+c.left*1000;ck=setInterval(()=>{c.left=Math.max(0,Math.round((c.end-Date.now())/1000));const el=$('bc');if(el){el.textContent=mmss(c.left);el.classList.toggle('urgent',c.left<=60);}if(c.left<=0){c.run=false;stopCk();if(S.tTab==='clock')render();}},250);}render();});
+  on('ckReset',()=>{stopCk();S.clock={total:S.clock.total,left:S.clock.total,run:false};render();});
+  document.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{const i=+b.dataset.b;S.board[i]=Math.max(0,S.board[i]+(+b.dataset.d));save();render();});
+  on('bReset',()=>{S.board=Array(8).fill(0);save();render();});
+  document.querySelectorAll('[data-cc]').forEach(b=>b.onclick=()=>{S.cmp={case:b.dataset.cc,ids:[],show:false};render();});
+  document.querySelectorAll('[data-ci]').forEach(b=>b.onclick=()=>keepY(()=>{const id=+b.dataset.ci;S.cmp.ids=S.cmp.ids.includes(id)?S.cmp.ids.filter(v=>v!==id):[...S.cmp.ids,id];}));
+  on('cmpShow',()=>keepY(()=>{S.cmp.show=!S.cmp.show;}));on('cmpClr',()=>keepY(()=>{S.cmp.ids=[];S.cmp.show=false;}));}
+function stopCk(){if(ck)clearInterval(ck);ck=null;}
+$('vStudent').onclick=()=>{S.view='student';render();};$('vTeacher').onclick=()=>{S.view='teacher';render();};
+if(location.hash==='#teacher')S.view='teacher';
+render();
+</script>
+
+</body></html>
